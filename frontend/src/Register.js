@@ -26,8 +26,7 @@ export default function Register({ onGoLogin }) {
   return (
     <Card
       title="Create account"
-      desc="Register a new user to test transfers and realtime notifications."
-      footer="Security note: bcrypt has max 72 bytes password (lab constraint)."
+      desc="Register a new user for transfers and notifications."
     >
       <div className="space-y-4">
         <div>

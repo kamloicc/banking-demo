@@ -155,15 +155,6 @@ export default function Dashboard({ onLogout }) {
               {err && <div className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">{err}</div>}
             </div>
           </Card>
-
-          <Card title="Demo notes" desc="What to explain in interview">
-            <ul className="list-disc pl-5 text-sm text-slate-700 space-y-2">
-              <li>Session stored in <b>Redis</b> → backend stateless</li>
-              <li>Balance & transfers stored in <b>Postgres</b></li>
-              <li>Realtime notify via <b>WebSocket</b> (Ingress supports WS)</li>
-              <li>Scale pods: notify works cross-pod using Redis pub/sub (next step)</li>
-            </ul>
-          </Card>
         </div>
 
         <Card title="Notifications" desc="Incoming transfer notifications (WebSocket)">

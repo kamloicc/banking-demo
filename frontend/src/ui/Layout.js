@@ -8,11 +8,11 @@ export default function Layout({ user, env = "LAB", onLogout, children }) {
         <div className="mx-auto flex max-w-6xl items-center justify-between px-4 py-3">
           <div className="flex items-center gap-3">
             <div className="grid h-9 w-9 place-items-center rounded-xl bg-blue-600 text-white font-bold">
-              B
+              K
             </div>
             <div>
-              <div className="text-sm font-semibold text-slate-900">NPD Banking</div>
-              <div className="text-xs text-slate-500">Postgres • Redis Session • WebSocket Notify</div>
+              <div className="text-sm font-semibold text-slate-900">Kamloic Trust Bank</div>
+              <div className="text-xs text-slate-500">Secure banking services</div>
             </div>
           </div>
 
@@ -44,10 +44,6 @@ export default function Layout({ user, env = "LAB", onLogout, children }) {
               <div className="rounded-xl bg-blue-50 px-3 py-2 font-semibold text-blue-700">Dashboard</div>
               <div className="rounded-xl px-3 py-2 text-slate-700 hover:bg-slate-50">Transfers</div>
               <div className="rounded-xl px-3 py-2 text-slate-700 hover:bg-slate-50">Notifications</div>
-            </div>
-            <div className="mt-4 rounded-xl bg-slate-50 px-3 py-3 text-xs text-slate-600">
-              Demo focus: <span className="font-semibold">Session in Redis</span>, realtime notify via{" "}
-              <span className="font-semibold">WebSocket</span>.
             </div>
           </div>
         </aside>
