@@ -1,0 +1,19 @@
+# Biến môi trường GitOps — ít thay đổi, không chứa secret
+gitops:
+  repoUrl: https://github.com/YOUR_ORG/banking-demo.git
+  branch: main
+  valuesImagesPath: phase9-gitops-platform/gitops/values-images.yaml
+
+harbor:
+  host: harbor.example.com
+  project: banking-demo
+
+jenkins:
+  namespace: platform
+  kanikoImage: gcr.io/kaniko-project/executor:v1.23.2
+
+ci:
+  # Path filters — chỉ build khi đổi Phase 8 code
+  watchPaths:
+    - phase8-application-v3/**
+    - phase9-gitops-platform/gitops/values-images.yaml

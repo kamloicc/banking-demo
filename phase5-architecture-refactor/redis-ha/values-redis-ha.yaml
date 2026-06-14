@@ -1,0 +1,61 @@
+# Phase 5 - Redis HA (Bitnami Redis, master + replica)
+# Dùng: helm upgrade -i redis bitnami/redis -n redis -f values-redis-ha.yaml
+
+architecture: replication
+
+auth:
+  enabled: true
+  password: "Mbfs@2025"
+  sentinel: true
+
+####################
+# MASTER
+####################
+master:
+  persistence:
+    enabled: true
+    size: 20Gi
+    storageClass: nfs-client
+
+  podAntiAffinityPreset: soft
+
+####################
+# REPLICA
+####################
+replica:
+  replicaCount: 3
+
+  persistence:
+    enabled: true
+    size: 20Gi
+    storageClass: nfs-client
+
+  podAntiAffinityPreset: soft
+
+####################
+# SENTINEL (HA auto-failover)
+####################
+sentinel:
+  enabled: true
+  replicas: 3
+
+####################
+# METRICS (Prometheus redis-exporter sidecar)
+####################
+metrics:
+  enabled: true
+  image:
+    registry: docker.io
+    repository: bitnami/redis-exporter
+  resources:
+    requests:
+      memory: "32Mi"
+      cpu: "50m"
+    limits:
+      memory: "64Mi"
+      cpu: "200m"
+  service:
+    port: 9121
+
+# Connection string cho app:
+# redis://redis-master.redis.svc.cluster.local:6379/0

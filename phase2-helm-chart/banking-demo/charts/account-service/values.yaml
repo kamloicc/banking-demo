@@ -1,0 +1,48 @@
+# ArgoCD/Helm merge theo key account-service
+account-service:
+  fullnameOverride: account-service
+  enabled: true
+  image:
+    repository: registry.gitlab.com/kiettt164/banking-demo-payment/account-service
+    tag: 2d4c7af
+    pullPolicy: Always
+  imagePullSecrets: []
+  replicas: 1
+  service:
+    port: 8002
+    portName: http
+  secretRef:
+    name: banking-db-secret
+    keys:
+      databaseUrl: DATABASE_URL
+      redisUrl: REDIS_URL
+  # Phase 8: RABBITMQ_URL từ Secret (consumer v3)
+  rabbitmqSecretRef:
+    name: rabbitmq-connection-secret
+    key: RABBITMQ_URL
+  corsOrigins: "http://localhost:3000"
+  # OpenTelemetry tracing → gửi traces về otel-collector → Tempo
+  extraEnv:
+    OTEL_EXPORTER_OTLP_ENDPOINT: "http://opentelemetry-collector.monitoring.svc.cluster.local:4317"
+  readinessProbe:
+    enabled: true
+    path: /health
+    port: 8002
+    initialDelaySeconds: 10
+    periodSeconds: 15
+    timeoutSeconds: 1
+  resources:
+    requests:
+      memory: "128Mi"
+      cpu: "100m"
+    limits:
+      memory: "512Mi"
+      cpu: "600m"
+  securityContext:
+    pod:
+      seccompProfile:
+        type: RuntimeDefault
+    container:
+      allowPrivilegeEscalation: false
+      capabilities:
+        drop: ["ALL"]

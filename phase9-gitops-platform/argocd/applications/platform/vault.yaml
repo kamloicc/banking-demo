@@ -1,0 +1,38 @@
+# HashiCorp Vault — stub Application (chỉnh values trước khi bật auto-sync)
+# Production: HA mode, auto-unseal (KMS), backup
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: platform-vault
+  namespace: argocd
+  labels:
+    app.kubernetes.io/part-of: phase9-gitops
+  annotations:
+    argocd.argoproj.io/sync-wave: "0"
+spec:
+  project: banking-platform
+  source:
+    repoURL: https://helm.releases.hashicorp.com
+    chart: vault
+    targetRevision: 0.28.1
+    helm:
+      releaseName: vault
+      values: |
+        server:
+          ha:
+            enabled: false
+          dev:
+            enabled: true
+            devRootToken: "root"
+        ui:
+          enabled: true
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: vault
+  syncPolicy:
+    syncOptions:
+      - CreateNamespace=true
+    # Manual sync lần đầu — bỏ comment automated khi đã init/unseal
+    # automated:
+    #   prune: false
+    #   selfHeal: true

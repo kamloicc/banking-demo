@@ -1,0 +1,46 @@
+# Image tags — CI (Jenkins) cập nhật file này sau mỗi build thành công.
+# ArgoCD banking Applications merge file này SAU values-phase8.yaml.
+#
+# Registry: Harbor (thay harbor.example.com)
+# Tag mặc định: short Git SHA (7 ký tự) hoặc v3 cho release tag
+
+global:
+  imageRegistry: harbor.example.com/banking-demo
+  imagePullSecrets:
+    - name: harbor-registry
+
+api-producer:
+  image:
+    repository: harbor.example.com/banking-demo/api-producer
+    tag: v3
+    pullPolicy: Always
+
+auth-service:
+  image:
+    repository: harbor.example.com/banking-demo/auth-service
+    tag: v3
+    pullPolicy: Always
+
+account-service:
+  image:
+    repository: harbor.example.com/banking-demo/account-service
+    tag: v3
+    pullPolicy: Always
+
+transfer-service:
+  image:
+    repository: harbor.example.com/banking-demo/transfer-service
+    tag: v3
+    pullPolicy: Always
+
+notification-service:
+  image:
+    repository: harbor.example.com/banking-demo/notification-service
+    tag: v3
+    pullPolicy: Always
+
+frontend:
+  image:
+    repository: harbor.example.com/banking-demo/frontend
+    tag: latest
+    pullPolicy: Always

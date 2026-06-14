@@ -1,0 +1,26 @@
+# Pod template — Kaniko executor (Jenkins Kubernetes plugin)
+# Mount Secret harbor-registry vào /kaniko/.docker hoặc tạo config trong pipeline
+apiVersion: v1
+kind: Pod
+metadata:
+  labels:
+    jenkins: kaniko
+spec:
+  serviceAccountName: jenkins-kaniko
+  containers:
+    - name: kaniko
+      image: gcr.io/kaniko-project/executor:v1.23.2
+      command:
+        - /busybox/cat
+      tty: true
+      volumeMounts:
+        - name: docker-config
+          mountPath: /kaniko/.docker
+          readOnly: true
+  volumes:
+    - name: docker-config
+      secret:
+        secretName: harbor-registry
+        items:
+          - key: .dockerconfigjson
+            path: config.json

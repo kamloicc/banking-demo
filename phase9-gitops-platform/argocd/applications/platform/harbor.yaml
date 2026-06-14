@@ -1,0 +1,38 @@
+# Harbor — stub Application
+# Xem harbor/README.md: TLS, admin password, robot accounts
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: platform-harbor
+  namespace: argocd
+  labels:
+    app.kubernetes.io/part-of: phase9-gitops
+  annotations:
+    argocd.argoproj.io/sync-wave: "0"
+spec:
+  project: banking-platform
+  source:
+    repoURL: https://helm.goharbor.io
+    chart: harbor
+    targetRevision: 1.15.0
+    helm:
+      releaseName: harbor
+      values: |
+        expose:
+          type: ingress
+          ingress:
+            hosts:
+              core: harbor.example.com
+        harborAdminPassword: "ChangeMe-Harbor-Admin"
+        persistence:
+          enabled: true
+          persistentVolumeClaim:
+            registry:
+              storageClass: nfs-client
+              size: 20Gi
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: platform
+  syncPolicy:
+    syncOptions:
+      - CreateNamespace=true

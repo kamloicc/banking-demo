@@ -1,0 +1,8 @@
+@Library('banking-demo') _
+
+bankingDemoPipeline([
+  harborHost: 'harbor.example.com',
+  harborProject: 'banking-demo',
+  gitBranch: 'main',
+  gitopsValuesFile: 'phase9-gitops-platform/gitops/values-images.yaml',
+])

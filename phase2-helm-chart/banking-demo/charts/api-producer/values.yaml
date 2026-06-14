@@ -1,0 +1,36 @@
+# API Producer — Phase 8 (Kong → Producer → RabbitMQ → Consumers)
+api-producer:
+  fullnameOverride: api-producer
+  enabled: false  # Bật khi dùng values-phase8.yaml
+  image:
+    repository: registry.gitlab.com/kiettt164/banking-demo-payment/api-producer
+    tag: 2d4c7af
+    pullPolicy: Always
+  replicas: 1
+  service:
+    port: 8080
+    portName: http
+  secretRef:
+    name: banking-db-secret
+    keys:
+      redisUrl: REDIS_URL
+  # RabbitMQ: dùng Secret riêng (tạo thủ công), KHÔNG ghi URL/password vào values
+  rabbitmqSecretRef:
+    name: rabbitmq-connection-secret
+    key: RABBITMQ_URL
+  # OpenTelemetry tracing → gửi traces về otel-collector → Tempo
+  extraEnv:
+    OTEL_EXPORTER_OTLP_ENDPOINT: "http://opentelemetry-collector.monitoring.svc.cluster.local:4317"
+  readinessProbe:
+    enabled: true
+    path: /health
+    port: 8080
+    initialDelaySeconds: 10
+    periodSeconds: 15
+  resources:
+    requests:
+      memory: "128Mi"
+      cpu: "100m"
+    limits:
+      memory: "512Mi"
+      cpu: "500m"

@@ -1,0 +1,40 @@
+# Jenkins — stub Application (Kubernetes cloud + Shared Library cấu hình trong UI)
+# Chart: https://github.com/jenkinsci/helm-charts
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: platform-jenkins
+  namespace: argocd
+  labels:
+    app.kubernetes.io/part-of: phase9-gitops
+  annotations:
+    argocd.argoproj.io/sync-wave: "1"
+spec:
+  project: banking-platform
+  source:
+    repoURL: https://charts.jenkins.io
+    chart: jenkins
+    targetRevision: 5.7.14
+    helm:
+      releaseName: jenkins
+      values: |
+        controller:
+          admin:
+            password: "ChangeMe-Jenkins"
+          installPlugins:
+            - kubernetes:4306.vc91e37ea_722d
+            - workflow-aggregator:596.v8c21c963d92d
+            - git:5.5.2
+            - configuration-as-code:1932.v75cb_b_f812b_6
+          JCasC:
+            defaultConfig: true
+        agent:
+          enabled: true
+          kubernetes:
+            namespace: platform
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: platform
+  syncPolicy:
+    syncOptions:
+      - CreateNamespace=true
