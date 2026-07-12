@@ -5,50 +5,136 @@ pipeline {
         skipDefaultCheckout(true)
         timestamps()
         disableConcurrentBuilds()
+        buildDiscarder(logRotator(numToKeepStr: '20'))
+    }
+
+    environment {
+        /*
+         * Homebrew locations:
+         *   Apple Silicon: /opt/homebrew/bin
+         *   Intel Mac:    /usr/local/bin
+         */
+        PATH = "/opt/homebrew/bin:/usr/local/bin:${env.PATH}"
+
+        PIP_DISABLE_PIP_VERSION_CHECK = "1"
+        PYTHONDONTWRITEBYTECODE = "1"
+        CI = "true"
     }
 
     stages {
         stage('Checkout') {
             steps {
+                deleteDir()
                 checkout scm
+
+                sh '''
+                    set -eu
+
+                    echo "Repository: $(git config --get remote.origin.url)"
+                    echo "Branch:     $(git branch --show-current || true)"
+                    echo "Commit:     $(git rev-parse --short HEAD)"
+                '''
             }
         }
 
-        stage('Verify repository') {
+        stage('Verify toolchain') {
             steps {
                 sh '''
                     set -eu
 
-                    echo "Remote repository:"
-                    git config --get remote.origin.url
+                    echo "Git:"
+                    command -v git
+                    git --version
 
-                    echo "Checked-out commit:"
-                    git rev-parse --short HEAD
+                    echo "Python:"
+                    command -v python3.11
+                    python3.11 --version
 
-                    echo "Validating project structure..."
+                    echo "Node:"
+                    command -v node
+                    node --version
 
-                    test -f backend/requirements.txt
-                    test -f common/requirements.txt
-                    test -f frontend/package.json
-
-                    test -f services/auth-service/main.py
-                    test -f services/account-service/main.py
-                    test -f services/transfer-service/main.py
-                    test -f services/notification-service/main.py
-
-                    echo "Repository integration is valid."
+                    echo "npm:"
+                    command -v npm
+                    npm --version
                 '''
+            }
+        }
+
+        stage('Install Python dependencies') {
+            steps {
+                sh '''
+                    set -eu
+
+                    rm -rf .venv
+                    python3.11 -m venv .venv
+
+                    . .venv/bin/activate
+
+                    python -m pip install --upgrade pip
+                    python -m pip install \
+                        -r backend/requirements.txt \
+                        -r common/requirements.txt
+                '''
+            }
+        }
+
+        stage('Validate Python code') {
+            steps {
+                sh '''
+                    set -eu
+
+                    . .venv/bin/activate
+
+                    python -m compileall -q \
+                        backend \
+                        common \
+                        services
+
+                    echo "Python source validation succeeded."
+                '''
+            }
+        }
+
+        stage('Install frontend dependencies') {
+            steps {
+                dir('frontend') {
+                    sh '''
+                        set -eu
+                        npm ci --no-audit --no-fund
+                    '''
+                }
+            }
+        }
+
+        stage('Build frontend') {
+            steps {
+                dir('frontend') {
+                    sh '''
+                        set -eu
+
+                        npm run build
+                        test -f build/index.html
+
+                        echo "Frontend build succeeded."
+                    '''
+                }
             }
         }
     }
 
     post {
         success {
-            echo 'Jenkins successfully checked out the banking-demo repository.'
+            archiveArtifacts(
+                artifacts: 'frontend/build/**',
+                fingerprint: true
+            )
+
+            echo 'Application dependency installation and build succeeded.'
         }
 
         failure {
-            echo 'Repository checkout or validation failed. Review the Console Output.'
+            echo 'Build failed. Open the first failed stage in Console Output.'
         }
     }
 }
