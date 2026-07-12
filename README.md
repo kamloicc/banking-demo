@@ -17,25 +17,6 @@ The application focuses on core banking features rather than UI complexity, maki
 - Designed to run in Docker and easily migrate to Kubernetes
 
 3. High-Level Architecture:
-```
-+-------------+        HTTP / WebSocket        +------------------+
-|   Frontend  |  <--------------------------> |    Backend API   |
-|  (React)    |                                |   (FastAPI)      |
-+-------------+                                +------------------+
-        |                                              |
-        |                                              |
-        |                     Redis                    |
-        |          +--------------------------------+  |
-        |          |  Session Store / Cache         |  |
-        |          |  (User session, online state)  |  |
-        |          +--------------------------------+  |
-        |                                              |
-        |                 PostgreSQL                   |
-        |          +--------------------------------+  |
-        |          |  Users, Balances, Transfers     | |
-        |          |  Transaction history            | |
-        |          +--------------------------------+  |
-```
 
 ```mermaid
 flowchart LR
