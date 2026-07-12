@@ -9,16 +9,17 @@ pipeline {
     }
 
     environment {
-        /*
-         * Homebrew locations:
-         *   Apple Silicon: /opt/homebrew/bin
-         *   Intel Mac:    /usr/local/bin
-         */
         PATH = "/opt/homebrew/bin:/usr/local/bin:${env.PATH}"
 
-        PIP_DISABLE_PIP_VERSION_CHECK = "1"
-        PYTHONDONTWRITEBYTECODE = "1"
         CI = "true"
+
+        IMAGE_PREFIX = "banking-demo"
+
+        /*
+         * Most cloud Kubernetes nodes use AMD64.
+         * Change this to linux/arm64 when the deployment cluster is ARM.
+         */
+        TARGET_PLATFORM = "linux/amd64"
     }
 
     stages {
@@ -30,9 +31,10 @@ pipeline {
                 sh '''
                     set -eu
 
+                    git rev-parse --short=12 HEAD > .image-tag
+
                     echo "Repository: $(git config --get remote.origin.url)"
-                    echo "Branch:     $(git branch --show-current || true)"
-                    echo "Commit:     $(git rev-parse --short HEAD)"
+                    echo "Commit:     $(cat .image-tag)"
                 '''
             }
         }
@@ -46,10 +48,6 @@ pipeline {
                     command -v git
                     git --version
 
-                    echo "Python:"
-                    command -v python3.11
-                    python3.11 --version
-
                     echo "Node:"
                     command -v node
                     node --version
@@ -57,96 +55,80 @@ pipeline {
                     echo "npm:"
                     command -v npm
                     npm --version
+
+                    echo "Docker:"
+                    command -v docker
+                    docker --version
+                    docker info >/dev/null
+
+                    echo "Cloud Native Buildpacks Pack CLI:"
+                    command -v pack
+                    pack version
                 '''
             }
         }
 
-        stage('Install Python dependencies') {
-            steps {
-                sh '''
-                    set -eu
-
-                    rm -rf .venv
-                    python3.11 -m venv .venv
-
-                    . .venv/bin/activate
-
-                    python -m pip install --upgrade pip
-                    python -m pip install \
-                        -r backend/requirements.txt \
-                        -r common/requirements.txt \
-                        -r requirements-dev.txt
-                '''
-            }
-        }
-
-        stage('Validate Python code') {
-            steps {
-                sh '''
-                    set -eu
-
-                    . .venv/bin/activate
-
-                    python -m compileall -q \
-                        backend \
-                        common \
-                        services
-
-                    echo "Python source validation succeeded."
-                '''
-            }
-        }
-
-        stage('Install frontend dependencies') {
+        stage('Build frontend application') {
             steps {
                 dir('frontend') {
                     sh '''
                         set -eu
+
+                        rm -rf node_modules build
+
                         npm ci --no-audit --no-fund
-                    '''
-                }
-            }
-        }
-
-
-        stage('Python unit tests') {
-	    steps {
-        	sh '''
-            	    set -eu
-
-            	    . .venv/bin/activate
-
-	            mkdir -p test-results
-
-	            python -m pytest \
-	                tests \
-	                --verbose \
-	                --junitxml=test-results/pytest.xml
-	        '''
-	    }
-
-	    post {
-	        always {
-	            junit(
-	                testResults: 'test-results/pytest.xml',
-	                allowEmptyResults: false
-	            )
-	        }
-	    }
-	}
-
-        stage('Build frontend') {
-            steps {
-                dir('frontend') {
-                    sh '''
-                        set -eu
-
                         npm run build
+
                         test -f build/index.html
 
-                        echo "Frontend build succeeded."
+                        echo "Frontend application build completed."
                     '''
                 }
+            }
+        }
+
+        stage('Build container images') {
+            steps {
+                sh '''
+                    set -eu
+
+                    chmod +x scripts/build-images.sh
+
+                    IMAGE_TAG="$(cat .image-tag)" \
+                    IMAGE_PREFIX="${IMAGE_PREFIX}" \
+                    TARGET_PLATFORM="${TARGET_PLATFORM}" \
+                    scripts/build-images.sh
+                '''
+            }
+        }
+
+        stage('Verify container images') {
+            steps {
+                sh '''
+                    set -eu
+
+                    image_tag="$(cat .image-tag)"
+
+                    for component in \
+                        auth-service \
+                        account-service \
+                        transfer-service \
+                        notification-service \
+                        frontend
+                    do
+                        image="${IMAGE_PREFIX}/${component}:${image_tag}"
+
+                        docker image inspect "${image}" >/dev/null
+
+                        architecture="$(
+                            docker image inspect \
+                                --format '{{.Os}}/{{.Architecture}}' \
+                                "${image}"
+                        )"
+
+                        echo "${image} -> ${architecture}"
+                    done
+                '''
             }
         }
     }
@@ -158,11 +140,11 @@ pipeline {
                 fingerprint: true
             )
 
-            echo 'Application dependency installation and build succeeded.'
+            echo 'Application and container image builds succeeded.'
         }
 
         failure {
-            echo 'Build failed. Open the first failed stage in Console Output.'
+            echo 'Application or image build failed. Review the first failed stage.'
         }
     }
 }
