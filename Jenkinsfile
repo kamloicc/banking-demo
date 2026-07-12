@@ -74,7 +74,8 @@ pipeline {
                     python -m pip install --upgrade pip
                     python -m pip install \
                         -r backend/requirements.txt \
-                        -r common/requirements.txt
+                        -r common/requirements.txt \
+                        -r requirements-dev.txt
                 '''
             }
         }
@@ -106,6 +107,33 @@ pipeline {
                 }
             }
         }
+
+
+        stage('Python unit tests') {
+	    steps {
+        	sh '''
+            	    set -eu
+
+            	    . .venv/bin/activate
+
+	            mkdir -p test-results
+
+	            python -m pytest \
+	                tests \
+	                --verbose \
+	                --junitxml=test-results/pytest.xml
+	        '''
+	    }
+
+	    post {
+	        always {
+	            junit(
+	                testResults: 'test-results/pytest.xml',
+	                allowEmptyResults: false
+	            )
+	        }
+	    }
+	}
 
         stage('Build frontend') {
             steps {
