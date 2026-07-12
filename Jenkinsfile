@@ -20,6 +20,9 @@ pipeline {
          * Change this to linux/arm64 when the deployment cluster is ARM.
          */
         TARGET_PLATFORM = "linux/amd64"
+        JFROG_REGISTRY = "kamloicc.jfrog.io"
+        JFROG_REPOSITORY = "banking-docker-local"
+
     }
 
     stages {
@@ -131,6 +134,85 @@ pipeline {
                 '''
             }
         }
+
+        stage('Publish images to JFrog') {
+	    steps {
+	        withCredentials([
+	            usernamePassword(
+	                credentialsId: 'jfrog-docker-credentials',
+	                usernameVariable: 'JFROG_USERNAME',
+	                passwordVariable: 'JFROG_PASSWORD'
+	            )
+	        ]) {
+	            sh '''
+	                set -eu
+	                set +x
+
+	                image_tag="$(cat .image-tag)"
+	                remote_prefix="${JFROG_REGISTRY}/${JFROG_REPOSITORY}/banking-demo"
+
+	                cleanup() {
+	                    docker logout "${JFROG_REGISTRY}" >/dev/null 2>&1 || true
+	                }
+
+	                trap cleanup EXIT
+
+	                printf '%s' "${JFROG_PASSWORD}" |
+	                    docker login "${JFROG_REGISTRY}" \
+	                        --username "${JFROG_USERNAME}" \
+	                        --password-stdin
+
+	                : > published-images.txt
+
+	                for component in \
+	                    auth-service \
+	                    account-service \
+	                    transfer-service \
+	                    notification-service \
+	                    frontend
+	                do
+	                    local_image="${IMAGE_PREFIX}/${component}:${image_tag}"
+	                    remote_image="${remote_prefix}/${component}:${image_tag}"
+	                    remote_latest="${remote_prefix}/${component}:latest"
+
+	                    echo "Publishing ${component}:${image_tag}"
+
+	                    docker image inspect "${local_image}" >/dev/null
+
+	                    docker tag \
+	                        "${local_image}" \
+	                        "${remote_image}"
+
+	                    docker push "${remote_image}"
+
+	                    docker tag \
+	                        "${local_image}" \
+	                        "${remote_latest}"
+
+	                    docker push "${remote_latest}"
+
+	                    docker manifest inspect "${remote_image}" >/dev/null
+
+	                    printf '%s\\n' \
+	                        "${remote_image}" \
+	                        >> published-images.txt
+	                done
+
+	                echo "Published images:"
+	                cat published-images.txt
+	            '''
+	        }
+	    }
+
+	    post {
+	        always {
+	            archiveArtifacts(
+	                artifacts: 'published-images.txt',
+	                allowEmptyArchive: true
+	            )
+	        }
+	    }
+	}
     }
 
     post {
