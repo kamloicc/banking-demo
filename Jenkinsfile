@@ -20,16 +20,9 @@ pipeline {
         CI = "true"
 
         /*
-         * Local application namespace used by the build script.
+         * Container image configuration.
          */
         IMAGE_PREFIX = "banking-demo"
-
-        /*
-         * Target architecture for the published images.
-         *
-         * Use linux/amd64 for most cloud Kubernetes nodes.
-         * Use linux/arm64 only when your deployment nodes are ARM-based.
-         */
         TARGET_PLATFORM = "linux/amd64"
 
         /*
@@ -38,10 +31,7 @@ pipeline {
         CNB_BUILDER = "paketobuildpacks/builder-jammy-base"
 
         /*
-         * JFrog configuration.
-         *
-         * Docker login uses only the hostname.
-         * Image references include the Artifactory repository key.
+         * JFrog Artifactory configuration.
          */
         JFROG_REGISTRY = "kamloicc.jfrog.io"
         JFROG_REPOSITORY = "banking-docker-local"
@@ -139,20 +129,17 @@ pipeline {
                     sh '''
                         set -eu
 
-                        /*
-                         * Jenkins normally enables shell tracing.
-                         * Disable it while credentials are available.
-                         */
+                        # Disable shell tracing while credentials are available.
                         set +x
 
                         image_tag="$(cat .image-tag)"
 
-                        cleanup() {
+                        cleanup_registry_login() {
                             docker logout "${JFROG_REGISTRY}" \
                                 >/dev/null 2>&1 || true
                         }
 
-                        trap cleanup EXIT INT TERM
+                        trap cleanup_registry_login EXIT INT TERM
 
                         echo "Authenticating to JFrog registry..."
 
