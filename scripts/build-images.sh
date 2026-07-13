@@ -94,26 +94,47 @@ verify_remote_image() {
 
 verify_remote_platform() {
     local image="$1"
-    local expected_architecture
 
-    expected_architecture="${TARGET_PLATFORM#linux/}"
+    local expected_os
+    local expected_architecture
+    local platform_part
+    local image_config
+
+    expected_os="${TARGET_PLATFORM%%/*}"
+
+    platform_part="${TARGET_PLATFORM#*/}"
+    expected_architecture="${platform_part%%/*}"
 
     echo "Checking image platform for ${image}..."
 
-    if ! docker buildx imagetools inspect "${image}" \
-        --format '{{json .Manifest}}' \
-        2>/dev/null |
-        grep -q "\"architecture\":\"${expected_architecture}\""; then
+    image_config="$(
+        docker buildx imagetools inspect "${image}" \
+            --format '{{json .Image}}'
+    )"
+
+    if ! printf '%s' "${image_config}" |
+        grep -q "\"os\":\"${expected_os}\""; then
 
         echo \
-            "Image ${image} does not contain the expected " \
-            "architecture ${expected_architecture}." >&2
+            "Image ${image} does not have the expected " \
+            "operating system ${expected_os}." >&2
 
-        docker buildx imagetools inspect "${image}" || true
+        printf '%s\n' "${image_config}" >&2
         return 1
     fi
 
-    echo "Image platform verified: ${TARGET_PLATFORM}"
+    if ! printf '%s' "${image_config}" |
+        grep -q "\"architecture\":\"${expected_architecture}\""; then
+
+        echo \
+            "Image ${image} does not have the expected " \
+            "architecture ${expected_architecture}." >&2
+
+        printf '%s\n' "${image_config}" >&2
+        return 1
+    fi
+
+    echo "Image platform verified: ${expected_os}/${expected_architecture}"
 }
 
 record_published_image() {
