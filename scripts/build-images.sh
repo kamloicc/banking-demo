@@ -112,8 +112,9 @@ verify_remote_platform() {
             --format '{{json .Image}}'
     )"
 
-    if ! printf '%s' "${image_config}" |
-        grep -q "\"os\":\"${expected_os}\""; then
+    if ! printf '%s\n' "${image_config}" |
+        grep -Eq \
+            "\"os\"[[:space:]]*:[[:space:]]*\"${expected_os}\""; then
 
         echo \
             "Image ${image} does not have the expected " \
@@ -123,8 +124,9 @@ verify_remote_platform() {
         return 1
     fi
 
-    if ! printf '%s' "${image_config}" |
-        grep -q "\"architecture\":\"${expected_architecture}\""; then
+    if ! printf '%s\n' "${image_config}" |
+        grep -Eq \
+            "\"architecture\"[[:space:]]*:[[:space:]]*\"${expected_architecture}\""; then
 
         echo \
             "Image ${image} does not have the expected " \
