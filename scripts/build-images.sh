@@ -4,17 +4,17 @@ set -Eeuo pipefail
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 
-BUILDER="${CNB_BUILDER:-paketobuildpacks/builder-jammy-base}"
-TARGET_PLATFORM="${TARGET_PLATFORM:-linux/amd64}"
+BUILDER="${CNB_BUILDER:-heroku/builder:24}"
+TARGET_PLATFORM="${TARGET_PLATFORM:-linux/arm64}"
 IMAGE_TAG="${IMAGE_TAG:-$(git -C "${ROOT_DIR}" rev-parse --short=12 HEAD)}"
 
 JFROG_REGISTRY="${JFROG_REGISTRY:-}"
 JFROG_REPOSITORY="${JFROG_REPOSITORY:-}"
 
+COMPONENT_NAMESPACE="banking-demo"
+
 CONTEXT_ROOT="${ROOT_DIR}/.cnb-contexts"
 PUBLISHED_FILE="${ROOT_DIR}/published-images.txt"
-
-COMPONENT_NAMESPACE="banking-demo"
 
 require_variable() {
     local variable_name="$1"
@@ -49,6 +49,7 @@ require_command docker
 require_command pack
 
 docker info >/dev/null
+docker buildx version >/dev/null
 
 REMOTE_PREFIX="${JFROG_REGISTRY}/${JFROG_REPOSITORY}/${COMPONENT_NAMESPACE}"
 
@@ -57,8 +58,8 @@ mkdir -p "${CONTEXT_ROOT}"
 
 : > "${PUBLISHED_FILE}"
 
-echo "Cloud Native Buildpacks configuration:"
-echo "  Builder:         ${BUILDER}"
+echo "Container build configuration:"
+echo "  Python builder:  ${BUILDER}"
 echo "  Target platform: ${TARGET_PLATFORM}"
 echo "  Image tag:       ${IMAGE_TAG}"
 echo "  Registry:        ${JFROG_REGISTRY}"
@@ -91,10 +92,51 @@ verify_remote_image() {
     return 1
 }
 
+verify_remote_platform() {
+    local image="$1"
+    local expected_architecture
+
+    expected_architecture="${TARGET_PLATFORM#linux/}"
+
+    echo "Checking image platform for ${image}..."
+
+    if ! docker buildx imagetools inspect "${image}" \
+        --format '{{json .Manifest}}' \
+        2>/dev/null |
+        grep -q "\"architecture\":\"${expected_architecture}\""; then
+
+        echo \
+            "Image ${image} does not contain the expected " \
+            "architecture ${expected_architecture}." >&2
+
+        docker buildx imagetools inspect "${image}" || true
+        return 1
+    fi
+
+    echo "Image platform verified: ${TARGET_PLATFORM}"
+}
+
 record_published_image() {
     local image="$1"
 
     printf '%s\n' "${image}" >> "${PUBLISHED_FILE}"
+}
+
+remove_python_cache_files() {
+    local directory="$1"
+
+    find "${directory}" \
+        -type d \
+        -name "__pycache__" \
+        -prune \
+        -exec rm -rf {} + \
+        2>/dev/null || true
+
+    find "${directory}" \
+        -type f \
+        -name "*.pyc" \
+        -delete \
+        2>/dev/null || true
 }
 
 build_python_service() {
@@ -117,44 +159,36 @@ build_python_service() {
 
     test -d "${service_source}"
     test -f "${service_source}/main.py"
+    test -d "${ROOT_DIR}/common"
     test -f "${ROOT_DIR}/common/requirements.txt"
 
+    rm -rf "${context}"
     mkdir -p "${context}"
 
     # Copy the shared application package.
     cp -R "${ROOT_DIR}/common" "${context}/common"
 
-    # Copy the individual service source.
+    # Copy the service source files into the application root.
     cp -R "${service_source}/." "${context}/"
 
-    # Dockerfiles are not used by Cloud Native Buildpacks.
+    # Dockerfiles are not used for the Python Buildpack build.
     rm -f "${context}/Dockerfile"
 
-    # Paketo's pip buildpack expects requirements.txt at the
-    # application context root.
+    # Heroku's Python buildpack detects requirements.txt in the
+    # application root.
     cp \
         "${ROOT_DIR}/common/requirements.txt" \
         "${context}/requirements.txt"
 
-    # Use python -m so the process does not depend on the uvicorn
-    # executable being directly available on PATH.
+    # Select the Python runtime used by the Heroku builder.
+    printf '%s\n' "3.11" > "${context}/.python-version"
+
+    # Define the process that runs inside the final image.
     cat > "${context}/Procfile" <<EOF
 web: python -m uvicorn main:app --host 0.0.0.0 --port ${service_port}
 EOF
 
-    # Remove local Python cache files from the build context.
-    find "${context}" \
-        -type d \
-        -name "__pycache__" \
-        -prune \
-        -exec rm -rf {} + \
-        2>/dev/null || true
-
-    find "${context}" \
-        -type f \
-        -name "*.pyc" \
-        -delete \
-        2>/dev/null || true
+    remove_python_cache_files "${context}"
 
     echo "Building and publishing:"
     echo "  ${versioned_image}"
@@ -163,8 +197,6 @@ EOF
     pack build "${versioned_image}" \
         --path "${context}" \
         --builder "${BUILDER}" \
-        --buildpack paketo-buildpacks/python \
-        --env "BP_CPYTHON_VERSION=3.11.*" \
         --platform "${TARGET_PLATFORM}" \
         --pull-policy if-not-present \
         --trust-builder \
@@ -173,6 +205,8 @@ EOF
 
     verify_remote_image "${versioned_image}"
     verify_remote_image "${latest_image}"
+
+    verify_remote_platform "${versioned_image}"
 
     record_published_image "${versioned_image}"
     record_published_image "${latest_image}"
@@ -194,6 +228,7 @@ build_frontend() {
     test -d "${ROOT_DIR}/frontend/build"
     test -f "${ROOT_DIR}/frontend/build/index.html"
 
+    rm -rf "${context}"
     mkdir -p "${context}/build"
 
     cp -R \
@@ -201,10 +236,11 @@ build_frontend() {
         "${context}/build/"
 
     cat > "${context}/nginx.conf" <<'EOF'
-worker_processes 1;
+worker_processes auto;
 daemon off;
 
 error_log /dev/stderr warn;
+pid /tmp/nginx.pid;
 
 events {
     worker_connections 1024;
@@ -221,24 +257,7 @@ http {
     uwsgi_temp_path       /tmp/nginx-uwsgi;
     scgi_temp_path        /tmp/nginx-scgi;
 
-    types {
-        text/html                       html htm;
-        text/css                        css;
-        text/plain                      txt;
-        application/javascript         js;
-        application/json               json;
-        application/xml                xml;
-        application/manifest+json      webmanifest;
-        image/svg+xml                   svg;
-        image/png                       png;
-        image/jpeg                      jpg jpeg;
-        image/gif                       gif;
-        image/x-icon                    ico;
-        font/woff                       woff;
-        font/woff2                      woff2;
-        application/octet-stream        bin;
-    }
-
+    include /etc/nginx/mime.types;
     default_type application/octet-stream;
 
     sendfile on;
@@ -259,7 +278,7 @@ http {
         listen 8080;
         server_name _;
 
-        root /workspace/build;
+        root /usr/share/nginx/html;
         index index.html;
 
         location = /health {
@@ -297,22 +316,40 @@ http {
 }
 EOF
 
+    cat > "${context}/Dockerfile" <<'EOF'
+FROM nginx:stable-alpine
+
+COPY nginx.conf /etc/nginx/nginx.conf
+COPY build/ /usr/share/nginx/html/
+
+EXPOSE 8080
+
+CMD ["nginx"]
+EOF
+
+    cat > "${context}/.dockerignore" <<'EOF'
+.git
+.gitignore
+Dockerfile*
+README*
+EOF
+
     echo "Building and publishing:"
     echo "  ${versioned_image}"
     echo "  ${latest_image}"
 
-    pack build "${versioned_image}" \
-        --path "${context}" \
-        --builder "${BUILDER}" \
-        --buildpack paketo-buildpacks/nginx \
+    docker buildx build \
         --platform "${TARGET_PLATFORM}" \
-        --pull-policy if-not-present \
-        --trust-builder \
-        --publish \
-        --tag "${latest_image}"
+        --file "${context}/Dockerfile" \
+        --tag "${versioned_image}" \
+        --tag "${latest_image}" \
+        --push \
+        "${context}"
 
     verify_remote_image "${versioned_image}"
     verify_remote_image "${latest_image}"
+
+    verify_remote_platform "${versioned_image}"
 
     record_published_image "${versioned_image}"
     record_published_image "${latest_image}"

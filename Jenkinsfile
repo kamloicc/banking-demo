@@ -28,8 +28,7 @@ pipeline {
         /*
          * Cloud Native Buildpacks builder.
          */
-        CNB_BUILDER = "paketobuildpacks/builder-jammy-base"
-
+	CNB_BUILDER = "heroku/builder:24"
         /*
          * JFrog Artifactory configuration.
          */
