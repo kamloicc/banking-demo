@@ -23,7 +23,7 @@ pipeline {
          * Container image configuration.
          */
         IMAGE_PREFIX = "banking-demo"
-        TARGET_PLATFORM = "linux/amd64"
+        TARGET_PLATFORM = "linux/arm64"
 
         /*
          * Cloud Native Buildpacks builder.
